@@ -20,6 +20,8 @@ const (
 	playerBytes              = 193
 	playerBytes2             = 194
 	playerBytes3             = 195
+	playerXP                 = 716
+	playerNextLevelXP        = 717
 )
 
 const (
@@ -121,6 +123,8 @@ func buildCreatePlayer(ch *character.Character) []byte {
 		{playerBytes, pBytes},
 		{playerBytes2, uint32(ch.FacialHair)},
 		{playerBytes3, uint32(ch.Gender)},
+		{playerXP, 0},            // current XP — without these the client's
+		{playerNextLevelXP, 400}, // XP bar reads nil and aborts world-enter init
 	})
 	return w.Bytes()
 }
