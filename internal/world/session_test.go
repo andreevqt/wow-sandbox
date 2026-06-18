@@ -246,3 +246,60 @@ func readCString(b []byte) string {
 	}
 	return string(b)
 }
+
+func TestWorldPlayerLogin(t *testing.T) {
+	const account = "TEST"
+	key := make([]byte, 40)
+	for i := range key {
+		key[i] = byte(i + 2)
+	}
+	sessions := session.NewStore()
+	sessions.Put(account, key)
+	chars := character.NewStore()
+	ch := chars.Create(account, "Rdeal", character.RaceHuman, 9)
+
+	srvConn, cliConn := net.Pipe()
+	go NewSession(srvConn, sessions, chars).Handle()
+	defer cliConn.Close()
+	cliConn.SetDeadline(time.Now().Add(2 * time.Second))
+
+	crypt := doHandshake(t, cliConn, account, key)
+
+	// CMSG_PLAYER_LOGIN with the character's guid.
+	loginBody := make([]byte, 8)
+	binary.LittleEndian.PutUint64(loginBody, ch.GUID)
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgPlayerLogin), loginBody)
+
+	// 1) SMSG_LOGIN_VERIFY_WORLD: map matches.
+	op, body := readServerPacket(t, cliConn, crypt)
+	if op != SmsgLoginVerifyWorld {
+		t.Fatalf("expected LOGIN_VERIFY_WORLD, got %#x", op)
+	}
+	if binary.LittleEndian.Uint32(body[0:4]) != ch.Map {
+		t.Fatalf("verify map = %d, want %d", binary.LittleEndian.Uint32(body[0:4]), ch.Map)
+	}
+
+	// 2) SMSG_TUTORIAL_FLAGS: 32 bytes.
+	op, body = readServerPacket(t, cliConn, crypt)
+	if op != SmsgTutorialFlags {
+		t.Fatalf("expected TUTORIAL_FLAGS, got %#x", op)
+	}
+	if len(body) != 32 {
+		t.Fatalf("tutorial flags len = %d, want 32", len(body))
+	}
+
+	// 3) SMSG_UPDATE_OBJECT: one object, CREATE_OBJECT2, player type.
+	op, body = readServerPacket(t, cliConn, crypt)
+	if op != SmsgUpdateObject {
+		t.Fatalf("expected UPDATE_OBJECT, got %#x", op)
+	}
+	if binary.LittleEndian.Uint32(body[0:4]) != 1 {
+		t.Fatalf("amount = %d, want 1", binary.LittleEndian.Uint32(body[0:4]))
+	}
+	if body[5] != updateTypeCreate2 {
+		t.Fatalf("update_type = %#x", body[5])
+	}
+	if body[8] != typeIDPlayer {
+		t.Fatalf("object_type = %#x", body[8])
+	}
+}
