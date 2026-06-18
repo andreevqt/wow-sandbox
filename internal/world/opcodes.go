@@ -9,7 +9,19 @@ const (
 	SmsgPong          uint16 = 0x1DD
 	CmsgCharEnum      uint16 = 0x37
 	SmsgCharEnum      uint16 = 0x3B
+	CmsgCharCreate    uint16 = 0x36
+	SmsgCharCreate    uint16 = 0x3A
 )
 
 // SMSG_AUTH_RESPONSE result code.
 const authOK = 0x0C
+
+// SMSG_CHAR_CREATE result codes (WorldResult). CHAR_CREATE_ERROR=0x2F is
+// verified; the others are contiguous in the vanilla enum.
+const (
+	charCreateSuccess   = 0x2E
+	charCreateError     = 0x2F
+	charCreateFailed    = 0x30
+	charCreateNameInUse = 0x31
+	charCreateDisabled  = 0x32
+)
