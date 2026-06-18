@@ -129,10 +129,11 @@ func (s *Session) handleProof() error {
 // handleRealmList replies with a single realm pointing at the world server.
 //
 // Vanilla (5875) layout — body: unk u32=0, numRealms u8, then per realm:
-//   icon u8, lockFlags u8, name cstring, address cstring, population f32,
+//   realmType u32, lockFlags u8, name cstring, address cstring, population f32,
 //   numChars u8, timezone u8, realmId u8; trailer u16.
-// CROSS-CHECK against CMaNGOS-classic realmd if the client shows no realm or
-// disconnects here (vanilla uses u8 realm count; TBC+ switched to u16).
+// NOTE: in vanilla the realm type is a u32 (4 bytes). Using u8 here shifts the
+// whole entry by 3 bytes — the real client then reads the name 3 bytes in
+// (e.g. "Sandbox" rendered as "dbox"). Verified against the 1.12 client.
 func (s *Session) handleRealmList() error {
 	pad := make([]byte, 4) // client sends 4 bytes of padding
 	if _, err := io.ReadFull(s.r, pad); err != nil {
@@ -142,7 +143,7 @@ func (s *Session) handleRealmList() error {
 	body := packet.NewWriter()
 	body.U32(0) // unused
 	body.U8(1)  // number of realms
-	body.U8(0)  // icon / realm type (0 = normal PvE)
+	body.U32(0) // realm type (0 = normal PvE) — u32 in vanilla
 	body.U8(0)  // lock / color flags
 	body.CString("Sandbox")
 	body.CString(WorldAddress)
