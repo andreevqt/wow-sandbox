@@ -11,6 +11,11 @@ const (
 	SmsgCharEnum      uint16 = 0x3B
 	CmsgCharCreate    uint16 = 0x36
 	SmsgCharCreate    uint16 = 0x3A
+
+	CmsgPlayerLogin      uint16 = 0x3D
+	SmsgLoginVerifyWorld uint16 = 0x236
+	SmsgTutorialFlags    uint16 = 0xFD
+	SmsgUpdateObject     uint16 = 0xA9
 )
 
 // SMSG_AUTH_RESPONSE result code.
