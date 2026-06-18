@@ -16,6 +16,12 @@ const (
 	SmsgLoginVerifyWorld uint16 = 0x236
 	SmsgTutorialFlags    uint16 = 0xFD
 	SmsgUpdateObject     uint16 = 0xA9
+
+	CmsgLogoutRequest   uint16 = 0x4B
+	SmsgLogoutResponse  uint16 = 0x4C
+	SmsgLogoutComplete  uint16 = 0x4D
+	CmsgLogoutCancel    uint16 = 0x4E
+	SmsgLogoutCancelAck uint16 = 0x4F
 )
 
 // SMSG_AUTH_RESPONSE result code.
