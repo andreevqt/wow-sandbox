@@ -1,5 +1,6 @@
 # Claude Code session/memory artifacts
 .claude/
+docs/
 
 # Go build artifacts
 /bin/
