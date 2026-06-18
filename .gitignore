@@ -1,0 +1,6 @@
+# Claude Code session/memory artifacts
+.claude/
+
+# Go build artifacts
+/bin/
+*.out
