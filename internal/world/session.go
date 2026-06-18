@@ -10,6 +10,8 @@ import (
 	"io"
 	"net"
 
+	"wowsandbox/internal/character"
+	"wowsandbox/internal/packet"
 	"wowsandbox/internal/session"
 )
 
@@ -17,14 +19,16 @@ var errBadSize = errors.New("world: packet size < 4")
 
 // Session drives one world-server connection: handshake, then opcode loop.
 type Session struct {
-	conn     net.Conn
-	r        *bufio.Reader
-	sessions *session.Store
-	crypt    *AuthCrypt // nil until auth completes
+	conn       net.Conn
+	r          *bufio.Reader
+	sessions   *session.Store
+	characters *character.Store
+	crypt      *AuthCrypt // nil until auth completes
+	account    string     // set on successful auth
 }
 
-func NewSession(conn net.Conn, sessions *session.Store) *Session {
-	return &Session{conn: conn, r: bufio.NewReader(conn), sessions: sessions}
+func NewSession(conn net.Conn, sessions *session.Store, characters *character.Store) *Session {
+	return &Session{conn: conn, r: bufio.NewReader(conn), sessions: sessions, characters: characters}
 }
 
 // sendPacket writes opcode+body, encrypting the 4-byte header once crypt is set.
@@ -98,6 +102,10 @@ func (s *Session) Handle() {
 			if err := s.handlePing(body); err != nil {
 				return
 			}
+		case CmsgCharCreate:
+			if err := s.handleCharCreate(body); err != nil {
+				return
+			}
 		case CmsgCharEnum:
 			if err := s.handleCharEnum(); err != nil {
 				return
@@ -155,6 +163,7 @@ func (s *Session) handleAuthSession(serverSeed uint32) error {
 	}
 
 	// Header encryption is active from the next packet onward.
+	s.account = account
 	s.crypt = NewAuthCrypt(key)
 
 	// SMSG_AUTH_RESPONSE (AUTH_OK) + billing fields (all zero in vanilla).
@@ -176,9 +185,99 @@ func (s *Session) handlePing(body []byte) error {
 	return s.sendPacket(SmsgPong, append([]byte(nil), seq...))
 }
 
-// handleCharEnum replies with an empty character list.
+// handleCharEnum replies with the account's characters.
 func (s *Session) handleCharEnum() error {
-	return s.sendPacket(SmsgCharEnum, []byte{0}) // 0 characters
+	chars := s.characters.List(s.account)
+	w := packet.NewWriter()
+	w.U8(uint8(len(chars)))
+	for _, ch := range chars {
+		writeEnumCharacter(w, ch)
+	}
+	return s.sendPacket(SmsgCharEnum, w.Bytes())
+}
+
+// writeEnumCharacter serialises one character into the vanilla SMSG_CHAR_ENUM
+// block. Equipment slots are sent empty (no items in M3).
+func writeEnumCharacter(w *packet.Writer, ch *character.Character) {
+	w.U64(ch.GUID)
+	w.CString(ch.Name)
+	w.U8(ch.Race)
+	w.U8(ch.Class)
+	w.U8(ch.Gender)
+	w.U8(ch.Skin)
+	w.U8(ch.Face)
+	w.U8(ch.HairStyle)
+	w.U8(ch.HairColor)
+	w.U8(ch.FacialHair)
+	w.U8(ch.Level)
+	w.U32(ch.Zone)
+	w.U32(ch.Map)
+	w.F32(ch.X)
+	w.F32(ch.Y)
+	w.F32(ch.Z)
+	w.U32(0) // guild id
+	w.U32(0) // character flags
+	w.U8(1)  // first login
+	w.U32(0) // pet display id
+	w.U32(0) // pet level
+	w.U32(0) // pet family
+	for i := 0; i < 19; i++ {
+		w.U32(0) // equipment display id
+		w.U8(0)  // equipment inventory type
+	}
+	w.U32(0) // first bag display id
+	w.U8(0)  // first bag inventory type
+}
+
+// handleCharCreate parses CMSG_CHAR_CREATE, enforces Human-only, stores the
+// character, and replies with SMSG_CHAR_CREATE.
+//
+// Body: name CString, race u8, class u8, gender u8, skin u8, face u8,
+// hairStyle u8, hairColor u8, facialHair u8, outfitId u8.
+func (s *Session) handleCharCreate(body []byte) error {
+	nameEnd := 0
+	for nameEnd < len(body) && body[nameEnd] != 0 {
+		nameEnd++
+	}
+	if nameEnd >= len(body) {
+		return s.sendCharCreateResult(charCreateFailed)
+	}
+	name := string(body[:nameEnd])
+	rest := body[nameEnd+1:]
+	if len(rest) < 9 {
+		return s.sendCharCreateResult(charCreateFailed)
+	}
+	race := rest[0]
+	class := rest[1]
+	gender := rest[2]
+	skin := rest[3]
+	face := rest[4]
+	hairStyle := rest[5]
+	hairColor := rest[6]
+	facialHair := rest[7]
+
+	if race != character.RaceHuman {
+		return s.sendCharCreateResult(charCreateDisabled) // sandbox: Humans only
+	}
+	if name == "" {
+		return s.sendCharCreateResult(charCreateFailed)
+	}
+	if s.characters.NameExists(name) {
+		return s.sendCharCreateResult(charCreateNameInUse)
+	}
+
+	ch := s.characters.Create(s.account, name, race, class)
+	ch.Gender = gender
+	ch.Skin = skin
+	ch.Face = face
+	ch.HairStyle = hairStyle
+	ch.HairColor = hairColor
+	ch.FacialHair = facialHair
+	return s.sendCharCreateResult(charCreateSuccess)
+}
+
+func (s *Session) sendCharCreateResult(code uint8) error {
+	return s.sendPacket(SmsgCharCreate, []byte{code})
 }
 
 // authDigest = SHA1(account · 0x00000000 · clientSeed · serverSeed · K).
