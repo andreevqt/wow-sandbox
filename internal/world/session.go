@@ -116,6 +116,14 @@ func (s *Session) Handle() {
 			if err := s.handlePlayerLogin(body); err != nil {
 				return
 			}
+		case CmsgLogoutRequest:
+			if err := s.handleLogoutRequest(); err != nil {
+				return
+			}
+		case CmsgLogoutCancel:
+			if err := s.handleLogoutCancel(); err != nil {
+				return
+			}
 		default:
 			// ignore unknown opcodes (M2 only needs ping + char enum)
 		}
@@ -189,6 +197,26 @@ func (s *Session) handlePing(body []byte) error {
 	}
 	seq := body[:4] // ping sequence (u32); latency follows but we ignore it
 	return s.sendPacket(SmsgPong, append([]byte(nil), seq...))
+}
+
+// handleLogoutRequest grants an instant logout and returns the client to the
+// character-selection screen. No combat/resting rules in this sandbox, so we
+// always allow it immediately.
+func (s *Session) handleLogoutRequest() error {
+	resp := packet.NewWriter()
+	resp.U32(0) // LOGOUT_RESPONSE_ACCEPTED
+	resp.U8(1)  // instant (no logout timer)
+	if err := s.sendPacket(SmsgLogoutResponse, resp.Bytes()); err != nil {
+		return err
+	}
+	s.player = nil                              // back to character select
+	return s.sendPacket(SmsgLogoutComplete, nil) // finish logout
+}
+
+// handleLogoutCancel acknowledges a cancelled logout. With instant logout the
+// client should not send this, but we answer for correctness.
+func (s *Session) handleLogoutCancel() error {
+	return s.sendPacket(SmsgLogoutCancelAck, nil)
 }
 
 // handleCharEnum replies with the account's characters.
