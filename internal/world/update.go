@@ -30,6 +30,7 @@ const (
 	objectTypePlayer     = 25         // OBJECT_FIELD_TYPE value: OBJECT|UNIT|PLAYER
 	updateFlagSelfLiving = 0x31       // SELF|ALL|LIVING
 	floatOne             = 0x3F800000 // 1.0f bit pattern
+	restStateNormal      = 2          // REST_STATE_NORMAL, stored in PLAYER_BYTES_2 byte 3
 )
 
 // packedGUID encodes a u64 as a mask byte (bit i set if byte i is non-zero)
@@ -121,7 +122,7 @@ func buildCreatePlayer(ch *character.Character) []byte {
 		{unitFieldDisplayID, display},
 		{unitFieldNativeDisplayID, display},
 		{playerBytes, pBytes},
-		{playerBytes2, uint32(ch.FacialHair)},
+		{playerBytes2, uint32(ch.FacialHair) | restStateNormal<<24}, // byte3 = rest state (else GetRestState()==nil)
 		{playerBytes3, uint32(ch.Gender)},
 		{playerXP, 0},            // current XP — without these the client's
 		{playerNextLevelXP, 400}, // XP bar reads nil and aborts world-enter init
