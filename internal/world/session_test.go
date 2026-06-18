@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"wowsandbox/internal/character"
 	"wowsandbox/internal/session"
 )
 
@@ -65,7 +66,7 @@ func TestWorldHandshakeToCharEnum(t *testing.T) {
 	sessions.Put(account, key)
 
 	srvConn, cliConn := net.Pipe()
-	go NewSession(srvConn, sessions).Handle()
+	go NewSession(srvConn, sessions, character.NewStore()).Handle()
 	defer cliConn.Close()
 	cliConn.SetDeadline(time.Now().Add(2 * time.Second))
 
@@ -132,7 +133,7 @@ func TestWorldRejectsBadDigest(t *testing.T) {
 	sessions.Put(account, key)
 
 	srvConn, cliConn := net.Pipe()
-	go NewSession(srvConn, sessions).Handle()
+	go NewSession(srvConn, sessions, character.NewStore()).Handle()
 	defer cliConn.Close()
 	cliConn.SetDeadline(time.Now().Add(2 * time.Second))
 
@@ -152,4 +153,96 @@ func TestWorldRejectsBadDigest(t *testing.T) {
 	if _, err := io.ReadFull(cliConn, make([]byte, 4)); err == nil {
 		t.Fatal("expected connection to close on bad digest")
 	}
+}
+
+// doHandshake runs AUTH_CHALLENGE/SESSION and returns the client-side crypt.
+func doHandshake(t *testing.T, conn net.Conn, account string, key []byte) *AuthCrypt {
+	t.Helper()
+	op, body := readServerPacket(t, conn, nil)
+	if op != SmsgAuthChallenge {
+		t.Fatalf("expected AUTH_CHALLENGE, got %#x", op)
+	}
+	serverSeed := binary.LittleEndian.Uint32(body)
+
+	clientSeed := uint32(0x11223344)
+	digest := authDigest(account, clientSeed, serverSeed, key)
+	asBody := make([]byte, 0, 64)
+	asBody = binary.LittleEndian.AppendUint32(asBody, 5875)
+	asBody = binary.LittleEndian.AppendUint32(asBody, 0)
+	asBody = append(asBody, []byte(account)...)
+	asBody = append(asBody, 0)
+	asBody = binary.LittleEndian.AppendUint32(asBody, clientSeed)
+	asBody = append(asBody, digest...)
+	writeClientPacket(t, conn, nil, uint32(CmsgAuthSession), asBody)
+
+	crypt := NewAuthCrypt(key)
+	if op, _ := readServerPacket(t, conn, crypt); op != SmsgAuthResponse {
+		t.Fatalf("expected AUTH_RESPONSE, got %#x", op)
+	}
+	return crypt
+}
+
+// charCreateBody builds a CMSG_CHAR_CREATE body.
+func charCreateBody(name string, race, class uint8) []byte {
+	b := append([]byte(name), 0)                     // name cstring
+	b = append(b, race, class, 0, 0, 0, 0, 0, 0, 0) // race,class,gender,skin,face,hair*,facial,outfit
+	return b
+}
+
+func TestWorldCharCreateAndEnum(t *testing.T) {
+	const account = "TEST"
+	key := make([]byte, 40)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	sessions := session.NewStore()
+	sessions.Put(account, key)
+
+	srvConn, cliConn := net.Pipe()
+	go NewSession(srvConn, sessions, character.NewStore()).Handle()
+	defer cliConn.Close()
+	cliConn.SetDeadline(time.Now().Add(2 * time.Second))
+
+	crypt := doHandshake(t, cliConn, account, key)
+
+	// Reject a non-Human (Orc = 2).
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgCharCreate), charCreateBody("Orcling", 2, 1))
+	if op, body := readServerPacket(t, cliConn, crypt); op != SmsgCharCreate || body[0] != charCreateDisabled {
+		t.Fatalf("non-Human: op=%#x body=%x, want CHAR_CREATE(%#x) disabled(%#x)", op, body, SmsgCharCreate, charCreateDisabled)
+	}
+
+	// Create a Human Warlock.
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgCharCreate), charCreateBody("Rdeal", 1, 9))
+	if op, body := readServerPacket(t, cliConn, crypt); op != SmsgCharCreate || body[0] != charCreateSuccess {
+		t.Fatalf("Human create: op=%#x body=%x, want success(%#x)", op, body, charCreateSuccess)
+	}
+
+	// Enumerate — exactly one character with the right name and race.
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgCharEnum), nil)
+	op, body := readServerPacket(t, cliConn, crypt)
+	if op != SmsgCharEnum {
+		t.Fatalf("expected CHAR_ENUM, got %#x", op)
+	}
+	if body[0] != 1 {
+		t.Fatalf("char count = %d, want 1", body[0])
+	}
+	// name starts at body[1+8] (count byte + 8-byte guid), null-terminated.
+	name := readCString(body[9:])
+	if name != "Rdeal" {
+		t.Fatalf("enum name = %q, want Rdeal", name)
+	}
+	// race is the byte right after the name's terminator.
+	raceOffset := 9 + len(name) + 1
+	if body[raceOffset] != 1 {
+		t.Fatalf("enum race = %d, want 1 (Human)", body[raceOffset])
+	}
+}
+
+func readCString(b []byte) string {
+	for i := range b {
+		if b[i] == 0 {
+			return string(b[:i])
+		}
+	}
+	return string(b)
 }
