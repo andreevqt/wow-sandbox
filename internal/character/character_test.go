@@ -36,3 +36,16 @@ func TestListEmptyAndNameExists(t *testing.T) {
 		t.Fatal("unexpected name")
 	}
 }
+
+func TestGetByGUID(t *testing.T) {
+	s := NewStore()
+	ch := s.Create("TEST", "Rdeal", RaceHuman, 9)
+
+	got := s.GetByGUID(ch.GUID)
+	if got == nil || got.Name != "Rdeal" {
+		t.Fatalf("GetByGUID returned %+v", got)
+	}
+	if s.GetByGUID(99999) != nil {
+		t.Fatal("expected nil for unknown guid")
+	}
+}

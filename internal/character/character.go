@@ -72,6 +72,20 @@ func (s *Store) List(account string) []*Character {
 	return s.byAcct[strings.ToUpper(account)]
 }
 
+// GetByGUID returns the character with the given GUID, or nil.
+func (s *Store) GetByGUID(guid uint64) *Character {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, list := range s.byAcct {
+		for _, ch := range list {
+			if ch.GUID == guid {
+				return ch
+			}
+		}
+	}
+	return nil
+}
+
 // NameExists reports whether any account already has a character with that
 // name (case-insensitive).
 func (s *Store) NameExists(name string) bool {
