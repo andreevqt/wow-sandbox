@@ -6,6 +6,7 @@ import (
 
 	"wowsandbox/internal/account"
 	"wowsandbox/internal/auth"
+	"wowsandbox/internal/character"
 	"wowsandbox/internal/session"
 	"wowsandbox/internal/world"
 )
@@ -14,10 +15,11 @@ func main() {
 	accounts := account.NewStore()
 	accounts.Register("TEST", "TEST")
 	sessions := session.NewStore()
+	characters := character.NewStore()
 	log.Printf("registered test account: TEST / TEST")
 
 	go serveLogon(accounts, sessions)
-	serveWorld(sessions) // blocks
+	serveWorld(sessions, characters) // blocks
 }
 
 func serveLogon(accounts *account.Store, sessions *session.Store) {
@@ -37,7 +39,7 @@ func serveLogon(accounts *account.Store, sessions *session.Store) {
 	}
 }
 
-func serveWorld(sessions *session.Store) {
+func serveWorld(sessions *session.Store, characters *character.Store) {
 	ln, err := net.Listen("tcp", ":8085")
 	if err != nil {
 		log.Fatalf("listen :8085: %v", err)
@@ -50,6 +52,6 @@ func serveWorld(sessions *session.Store) {
 			continue
 		}
 		log.Printf("world connection from %s", conn.RemoteAddr())
-		go world.NewSession(conn, sessions).Handle()
+		go world.NewSession(conn, sessions, characters).Handle()
 	}
 }
