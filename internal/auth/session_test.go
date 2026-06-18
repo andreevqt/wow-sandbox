@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"wowsandbox/internal/account"
+	"wowsandbox/internal/session"
 )
 
 // --- minimal client-side SRP mirror for the test ---
@@ -80,9 +81,10 @@ func buildChallengeRequest(user string) []byte {
 func TestLogonFlowEndToEnd(t *testing.T) {
 	store := account.NewStore()
 	store.Register("test", "test")
+	sessions := session.NewStore()
 
 	srvConn, cliConn := net.Pipe()
-	go NewSession(srvConn, store).Handle()
+	go NewSession(srvConn, store, sessions).Handle()
 	defer cliConn.Close()
 	cliConn.SetDeadline(time.Now().Add(2 * time.Second))
 

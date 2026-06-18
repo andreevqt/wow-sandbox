@@ -70,25 +70,26 @@ func NewServer(verifier []byte) *Server {
 func (s *Server) Bbytes() []byte { return toLE(s.B, 32) }
 
 // Verify checks the client's proof M1. On success it returns the server
-// proof M2 (20 bytes) and true. aBytes and m1 come straight off the wire.
-func (s *Server) Verify(user string, salt, aBytes, m1 []byte) ([]byte, bool) {
+// proof M2 (20 bytes), the 40-byte session key K, and true. aBytes and m1
+// come straight off the wire.
+func (s *Server) Verify(user string, salt, aBytes, m1 []byte) (M2 []byte, K []byte, ok bool) {
 	A := fromLE(aBytes)
 	if new(big.Int).Mod(A, N).Sign() == 0 { // reject A ≡ 0 (mod N)
-		return nil, false
+		return nil, nil, false
 	}
 	u := fromLE(sha1Concat(aBytes, toLE(s.B, 32)))
 	// S = (A * v^u)^b mod N
 	vu := new(big.Int).Exp(s.v, u, N)
 	avu := new(big.Int).Mod(new(big.Int).Mul(A, vu), N)
 	S := new(big.Int).Exp(avu, s.b, N)
-	K := calculateK(S)
+	K = calculateK(S)
 
 	expM1 := computeM1(user, salt, A, s.B, K)
 	if subtle.ConstantTimeCompare(expM1, m1) != 1 {
-		return nil, false
+		return nil, nil, false
 	}
-	M2 := sha1Concat(toLE(A, 32), expM1, K)
-	return M2, true
+	M2 = sha1Concat(toLE(A, 32), expM1, K)
+	return M2, K, true
 }
 
 // computeM1 = SHA1( (SHA1(N) xor SHA1(g)) | SHA1(UPPER(user)) | salt | A | B | K )

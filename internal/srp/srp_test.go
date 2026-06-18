@@ -51,7 +51,7 @@ func TestSRP6RoundTrip(t *testing.T) {
 	srv := NewServer(v)
 	A, M1, K := simulateClient(t, user, pass, salt, srv.Bbytes())
 
-	M2, ok := srv.Verify(user, salt, A, M1)
+	M2, _, ok := srv.Verify(user, salt, A, M1)
 	if !ok {
 		t.Fatal("server rejected a valid client proof")
 	}
@@ -68,7 +68,7 @@ func TestSRP6RejectsWrongPassword(t *testing.T) {
 	v := MakeVerifier("TEST", "RIGHT", salt)
 	srv := NewServer(v)
 	A, M1, _ := simulateClient(t, "TEST", "WRONG", salt, srv.Bbytes())
-	if _, ok := srv.Verify("TEST", salt, A, M1); ok {
+	if _, _, ok := srv.Verify("TEST", salt, A, M1); ok {
 		t.Fatal("server accepted a wrong-password proof")
 	}
 }

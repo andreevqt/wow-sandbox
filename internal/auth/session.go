@@ -7,6 +7,7 @@ import (
 
 	"wowsandbox/internal/account"
 	"wowsandbox/internal/packet"
+	"wowsandbox/internal/session"
 	"wowsandbox/internal/srp"
 )
 
@@ -19,13 +20,14 @@ type Session struct {
 	conn     net.Conn
 	r        *bufio.Reader
 	store    *account.Store
+	sessions *session.Store
 	srp      *srp.Server
 	username string
 	salt     []byte
 }
 
-func NewSession(conn net.Conn, store *account.Store) *Session {
-	return &Session{conn: conn, r: bufio.NewReader(conn), store: store}
+func NewSession(conn net.Conn, store *account.Store, sessions *session.Store) *Session {
+	return &Session{conn: conn, r: bufio.NewReader(conn), store: store, sessions: sessions}
 }
 
 // Handle reads opcodes until the connection closes or errors.
@@ -111,11 +113,12 @@ func (s *Session) handleProof() error {
 	A := buf[0:32]
 	M1 := buf[32:52]
 
-	M2, ok := s.srp.Verify(s.username, s.salt, A, M1)
+	M2, K, ok := s.srp.Verify(s.username, s.salt, A, M1)
 	if !ok {
 		_, err := s.conn.Write([]byte{CmdAuthLogonProof, WowFailIncorrectPassword})
 		return err
 	}
+	s.sessions.Put(s.username, K) // hand K to the world server
 
 	w := packet.NewWriter()
 	w.U8(CmdAuthLogonProof)

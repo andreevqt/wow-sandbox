@@ -6,12 +6,14 @@ import (
 
 	"wowsandbox/internal/account"
 	"wowsandbox/internal/auth"
+	"wowsandbox/internal/session"
 )
 
 func main() {
 	store := account.NewStore()
 	store.Register("TEST", "TEST")
 	log.Printf("registered test account: TEST / TEST")
+	sessions := session.NewStore()
 
 	ln, err := net.Listen("tcp", ":3724")
 	if err != nil {
@@ -26,6 +28,6 @@ func main() {
 			continue
 		}
 		log.Printf("connection from %s", conn.RemoteAddr())
-		go auth.NewSession(conn, store).Handle()
+		go auth.NewSession(conn, store, sessions).Handle()
 	}
 }
