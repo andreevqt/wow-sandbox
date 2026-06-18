@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 
 	"wowsandbox/internal/character"
 	"wowsandbox/internal/packet"
@@ -25,6 +26,7 @@ type Session struct {
 	characters *character.Store
 	crypt      *AuthCrypt // nil until auth completes
 	account    string     // set on successful auth
+	player  *character.Character // set on CMSG_PLAYER_LOGIN
 }
 
 func NewSession(conn net.Conn, sessions *session.Store, characters *character.Store) *Session {
@@ -108,6 +110,10 @@ func (s *Session) Handle() {
 			}
 		case CmsgCharEnum:
 			if err := s.handleCharEnum(); err != nil {
+				return
+			}
+		case CmsgPlayerLogin:
+			if err := s.handlePlayerLogin(body); err != nil {
 				return
 			}
 		default:
@@ -274,6 +280,45 @@ func (s *Session) handleCharCreate(body []byte) error {
 	ch.HairColor = hairColor
 	ch.FacialHair = facialHair
 	return s.sendCharCreateResult(charCreateSuccess)
+}
+
+// handlePlayerLogin enters the world: verify-world + tutorial flags + the
+// player's own object so the client finishes loading.
+//
+// Body: guid u64.
+func (s *Session) handlePlayerLogin(body []byte) error {
+	if len(body) < 8 {
+		return errBadSize
+	}
+	guid := binary.LittleEndian.Uint64(body[:8])
+	ch := s.characters.GetByGUID(guid)
+	if ch == nil || !strings.EqualFold(ch.Account, s.account) {
+		return errors.New("world: player login for unknown character")
+	}
+	s.player = ch
+
+	// 1) SMSG_LOGIN_VERIFY_WORLD: map + position.
+	vw := packet.NewWriter()
+	vw.U32(ch.Map)
+	vw.F32(ch.X)
+	vw.F32(ch.Y)
+	vw.F32(ch.Z)
+	vw.F32(0) // orientation
+	if err := s.sendPacket(SmsgLoginVerifyWorld, vw.Bytes()); err != nil {
+		return err
+	}
+
+	// 2) SMSG_TUTORIAL_FLAGS: mark all tutorials seen (suppresses popups).
+	tf := packet.NewWriter()
+	for i := 0; i < 8; i++ {
+		tf.U32(0xFFFFFFFF)
+	}
+	if err := s.sendPacket(SmsgTutorialFlags, tf.Bytes()); err != nil {
+		return err
+	}
+
+	// 3) SMSG_UPDATE_OBJECT: create the player's own object.
+	return s.sendPacket(SmsgUpdateObject, buildCreatePlayer(ch))
 }
 
 func (s *Session) sendCharCreateResult(code uint8) error {
