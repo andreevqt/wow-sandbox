@@ -9,6 +9,7 @@ const (
 
 // Auth result codes (subset).
 const (
-	WowSuccess            byte = 0x00
-	WowFailUnknownAccount byte = 0x04
+	WowSuccess               byte = 0x00
+	WowFailIncorrectPassword byte = 0x03
+	WowFailUnknownAccount    byte = 0x04
 )

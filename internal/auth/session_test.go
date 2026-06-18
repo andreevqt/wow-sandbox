@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha1"
-	"encoding/binary"
 	"io"
 	"math/big"
 	"net"
@@ -147,5 +146,4 @@ func TestLogonFlowEndToEnd(t *testing.T) {
 	if string(pr[2:22]) != string(wantM2) {
 		t.Fatalf("M2 mismatch\n got  %x\n want %x", pr[2:22], wantM2)
 	}
-	_ = binary.LittleEndian // keep import if unused elsewhere
 }

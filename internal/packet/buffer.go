@@ -63,7 +63,8 @@ func (r *Reader) Take(n int) ([]byte, error) {
 	if r.pos+n > len(r.b) {
 		return nil, io.ErrUnexpectedEOF
 	}
-	v := r.b[r.pos : r.pos+n]
+	v := make([]byte, n)
+	copy(v, r.b[r.pos:r.pos+n])
 	r.pos += n
 	return v, nil
 }

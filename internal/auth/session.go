@@ -113,7 +113,7 @@ func (s *Session) handleProof() error {
 
 	M2, ok := s.srp.Verify(s.username, s.salt, A, M1)
 	if !ok {
-		_, err := s.conn.Write([]byte{CmdAuthLogonProof, 0x03}) // 0x03 = WOW_FAIL_INCORRECT_PASSWORD
+		_, err := s.conn.Write([]byte{CmdAuthLogonProof, WowFailIncorrectPassword})
 		return err
 	}
 
