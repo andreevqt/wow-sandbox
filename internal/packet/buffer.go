@@ -14,6 +14,7 @@ func NewWriter() *Writer { return &Writer{} }
 func (w *Writer) U8(v uint8)   { w.b = append(w.b, v) }
 func (w *Writer) U16(v uint16) { w.b = binary.LittleEndian.AppendUint16(w.b, v) }
 func (w *Writer) U32(v uint32) { w.b = binary.LittleEndian.AppendUint32(w.b, v) }
+func (w *Writer) U64(v uint64) { w.b = binary.LittleEndian.AppendUint64(w.b, v) }
 func (w *Writer) F32(v float32) {
 	w.b = binary.LittleEndian.AppendUint32(w.b, math.Float32bits(v))
 }

@@ -34,3 +34,13 @@ func TestReaderRoundTrip(t *testing.T) {
 		t.Fatalf("U32 got %x", v)
 	}
 }
+
+func TestWriterU64(t *testing.T) {
+	w := NewWriter()
+	w.U64(0x0807060504030201)
+	got := w.Bytes()
+	want := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}
