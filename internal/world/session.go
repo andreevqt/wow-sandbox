@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"strings"
 
@@ -75,6 +76,9 @@ func (s *Session) readPacket() (uint32, []byte, error) {
 		if _, err := io.ReadFull(s.r, body); err != nil {
 			return 0, nil, err
 		}
+	}
+	if logPackets {
+		log.Printf("C→S world %s (%d bytes)%s", opcodeName(opcode), len(body), hexPreview(body))
 	}
 	return opcode, body, nil
 }

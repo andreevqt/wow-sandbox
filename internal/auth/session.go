@@ -3,6 +3,7 @@ package auth
 import (
 	"bufio"
 	"io"
+	"log"
 	"net"
 
 	"wowsandbox/internal/account"
@@ -37,6 +38,9 @@ func (s *Session) Handle() {
 		cmd, err := s.r.ReadByte()
 		if err != nil {
 			return
+		}
+		if logPackets {
+			log.Printf("C→S logon %s", logonOpcodeName(cmd))
 		}
 		switch cmd {
 		case CmdAuthLogonChallenge:
