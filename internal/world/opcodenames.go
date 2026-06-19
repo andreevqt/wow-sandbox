@@ -1,10 +1,8 @@
 package world
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
-	"strings"
 )
 
 // logPackets controls client→server packet logging. On by default; set
@@ -60,21 +58,4 @@ func opcodeName(op uint32) string {
 		return n
 	}
 	return fmt.Sprintf("UNKNOWN_0x%03X", op)
-}
-
-// hexPreview renders up to 48 bytes of a packet body as spaced hex for logging.
-func hexPreview(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	const max = 48
-	shown, suffix := b, ""
-	if len(shown) > max {
-		shown, suffix = shown[:max], " …"
-	}
-	parts := make([]string, len(shown))
-	for i, by := range shown {
-		parts[i] = hex.EncodeToString([]byte{by})
-	}
-	return " [" + strings.Join(parts, " ") + suffix + "]"
 }

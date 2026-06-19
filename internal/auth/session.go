@@ -2,6 +2,8 @@ package auth
 
 import (
 	"bufio"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -39,9 +41,6 @@ func (s *Session) Handle() {
 		if err != nil {
 			return
 		}
-		if logPackets {
-			log.Printf("C→S logon %s", logonOpcodeName(cmd))
-		}
 		switch cmd {
 		case CmdAuthLogonChallenge:
 			err = s.handleChallenge()
@@ -75,6 +74,11 @@ func (s *Session) handleChallenge() error {
 		return err
 	}
 	username := string(I)
+	if logPackets {
+		ver := fmt.Sprintf("%d.%d.%d", hdr[7], hdr[8], hdr[9])
+		log.Printf("C→S logon CMD_AUTH_LOGON_CHALLENGE account=%q version=%s build=%d",
+			username, ver, binary.LittleEndian.Uint16(hdr[10:12]))
+	}
 
 	acc, ok := s.store.Get(username)
 	if !ok {
@@ -116,6 +120,9 @@ func (s *Session) handleProof() error {
 	}
 	A := buf[0:32]
 	M1 := buf[32:52]
+	if logPackets {
+		log.Printf("C→S logon CMD_AUTH_LOGON_PROOF A=%s M1=%s", packet.HexDump(A), packet.HexDump(M1))
+	}
 
 	M2, K, ok := s.srp.Verify(s.username, s.salt, A, M1)
 	if !ok {
@@ -145,6 +152,9 @@ func (s *Session) handleRealmList() error {
 	pad := make([]byte, 4) // client sends 4 bytes of padding
 	if _, err := io.ReadFull(s.r, pad); err != nil {
 		return err
+	}
+	if logPackets {
+		log.Printf("C→S logon CMD_REALM_LIST")
 	}
 
 	body := packet.NewWriter()

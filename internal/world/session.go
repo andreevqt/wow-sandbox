@@ -78,7 +78,7 @@ func (s *Session) readPacket() (uint32, []byte, error) {
 		}
 	}
 	if logPackets {
-		log.Printf("C→S world %s (%d bytes)%s", opcodeName(opcode), len(body), hexPreview(body))
+		log.Printf("C→S world %s (%d bytes) %s", opcodeName(opcode), len(body), describeBody(opcode, body))
 	}
 	return opcode, body, nil
 }

@@ -4,7 +4,32 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
+	"strings"
 )
+
+// HexDump renders bytes as spaced lowercase hex for logging. Very large inputs
+// are capped (with a trailing ellipsis) so a single log line stays bounded.
+func HexDump(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	const max = 1024
+	shown, suffix := b, ""
+	if len(shown) > max {
+		shown, suffix = shown[:max], " …"
+	}
+	const digits = "0123456789abcdef"
+	var sb strings.Builder
+	sb.Grow(len(shown) * 3)
+	for i, by := range shown {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteByte(digits[by>>4])
+		sb.WriteByte(digits[by&0xF])
+	}
+	return sb.String() + suffix
+}
 
 // Writer accumulates little-endian encoded bytes.
 type Writer struct{ b []byte }

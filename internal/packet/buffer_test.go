@@ -35,6 +35,15 @@ func TestReaderRoundTrip(t *testing.T) {
 	}
 }
 
+func TestHexDump(t *testing.T) {
+	if got := HexDump(nil); got != "" {
+		t.Fatalf("empty = %q", got)
+	}
+	if got := HexDump([]byte{0x01, 0xAB, 0x00}); got != "01 ab 00" {
+		t.Fatalf("HexDump = %q", got)
+	}
+}
+
 func TestWriterU64(t *testing.T) {
 	w := NewWriter()
 	w.U64(0x0807060504030201)
