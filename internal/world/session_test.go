@@ -303,3 +303,49 @@ func TestWorldPlayerLogin(t *testing.T) {
 		t.Fatalf("object_type = %#x", body[8])
 	}
 }
+
+func TestWorldLogout(t *testing.T) {
+	const account = "TEST"
+	key := make([]byte, 40)
+	for i := range key {
+		key[i] = byte(i + 3)
+	}
+	sessions := session.NewStore()
+	sessions.Put(account, key)
+	chars := character.NewStore()
+	ch := chars.Create(account, "Rdeal", character.RaceHuman, 9)
+
+	srvConn, cliConn := net.Pipe()
+	go NewSession(srvConn, sessions, chars).Handle()
+	defer cliConn.Close()
+	cliConn.SetDeadline(time.Now().Add(2 * time.Second))
+
+	crypt := doHandshake(t, cliConn, account, key)
+
+	// Enter world, then drain the three login packets.
+	loginBody := make([]byte, 8)
+	binary.LittleEndian.PutUint64(loginBody, ch.GUID)
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgPlayerLogin), loginBody)
+	for i := 0; i < 3; i++ {
+		readServerPacket(t, cliConn, crypt)
+	}
+
+	// Logout: expect SMSG_LOGOUT_RESPONSE (accepted) then SMSG_LOGOUT_COMPLETE.
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgLogoutRequest), nil)
+	op, body := readServerPacket(t, cliConn, crypt)
+	if op != SmsgLogoutResponse {
+		t.Fatalf("expected LOGOUT_RESPONSE, got %#x", op)
+	}
+	if binary.LittleEndian.Uint32(body[0:4]) != 0 {
+		t.Fatalf("logout result = %d, want 0 (accepted)", binary.LittleEndian.Uint32(body[0:4]))
+	}
+	if op, _ := readServerPacket(t, cliConn, crypt); op != SmsgLogoutComplete {
+		t.Fatalf("expected LOGOUT_COMPLETE, got %#x", op)
+	}
+
+	// Back at character select: char enum still lists the character.
+	writeClientPacket(t, cliConn, crypt, uint32(CmsgCharEnum), nil)
+	if op, body := readServerPacket(t, cliConn, crypt); op != SmsgCharEnum || body[0] != 1 {
+		t.Fatalf("char enum after logout: op=%#x count=%d", op, body[0])
+	}
+}
